@@ -48,10 +48,11 @@ def fetch(video_url: str):
         "http": os.getenv("HTTP_PROXY"),
         "https": os.getenv("HTTPS_PROXY"),
     }
-
+    
     try:
-        transcript = YouTubeTranscriptApi.get_transcript(video_id, proxies=proxies)
-        text = " ".join([t["text"] for t in transcript])
+        api=YoutubeTranscriptApi()
+        transcript = api.fetch(video_id, proxies=proxies)
+        text = " ".join([t.text for t in transcript])
         return text
     except (TranscriptsDisabled, NoTranscriptFound, VideoUnavailable):
         st.error("Transcript not available for this video.")
