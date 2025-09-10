@@ -61,7 +61,7 @@ def create_vector_store(text: str, model_type: str, openai_key: str = None):
 
 def get_llm(model_type, openai_key=None):
     if model_type == "paid":
-        return ChatOpenAI(model="gpt-3.5 turbo", openai_api_key=openai_key)
+        return ChatOpenAI(model="gpt-3.5-turbo", openai_api_key=openai_key)
     else:
         return Free_model
 
