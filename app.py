@@ -3,7 +3,13 @@ import re
 import pickle
 import streamlit as st
 from dotenv import load_dotenv
-from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound, VideoUnavailable
+from youtube_transcript_api import (
+    YouTubeTranscriptApi,
+    TranscriptsDisabled,
+    NoTranscriptFound,
+    VideoUnavailable,
+    RequestBlocked
+)
 from langchain.vectorstores import FAISS
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
@@ -11,6 +17,7 @@ from langchain_huggingface import HuggingFaceEmbeddings, ChatHuggingFace, Huggin
 from langchain.prompts import PromptTemplate
 from langchain.schema.runnable import RunnableParallel, RunnablePassthrough
 
+# ---------------- Load ENV ----------------
 load_dotenv()
 
 # HuggingFace Free Model
@@ -30,18 +37,30 @@ def get_video_id_regex(url: str) -> str | None:
 
 # ---------------- Transcript Fetching ----------------
 def fetch(video_url: str):
-    """Fetch transcript text from YouTube video."""
+    """Fetch transcript text from YouTube video with proxy support."""
     video_id = get_video_id_regex(video_url)
     if not video_id:
         st.error("Invalid YouTube URL — couldn't extract video ID.")
         return None
-    api = YouTubeTranscriptApi()
+
+    # ✅ Load proxy from environment variables
+    proxies = {
+        "http": os.getenv("HTTP_PROXY"),
+        "https": os.getenv("HTTPS_PROXY"),
+    }
+
     try:
-        transcript = api.fetch(video_id)
-        text = " ".join([t.text for t in transcript])
+        transcript = YouTubeTranscriptApi.get_transcript(video_id, proxies=proxies)
+        text = " ".join([t["text"] for t in transcript])
         return text
     except (TranscriptsDisabled, NoTranscriptFound, VideoUnavailable):
         st.error("Transcript not available for this video.")
+        return None
+    except RequestBlocked:
+        st.error("Transcript request was blocked by YouTube. Try changing proxy or wait.")
+        return None
+    except Exception as e:
+        st.error(f"Unexpected error: {str(e)}")
         return None
 
 
@@ -51,7 +70,7 @@ def create_vector_store(text: str, model_type: str, openai_key: str = None):
     chunks = splitter.split_text(text)
 
     if model_type == "paid":
-        embeddings = OpenAIEmbeddings(model="text-embedding-3-small",openai_api_key=openai_key)
+        embeddings = OpenAIEmbeddings(model="text-embedding-3-small", openai_api_key=openai_key)
     else:
         embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
@@ -61,11 +80,12 @@ def create_vector_store(text: str, model_type: str, openai_key: str = None):
 
 def get_llm(model_type, openai_key=None):
     if model_type == "paid":
-        return ChatOpenAI(model="gpt-3.5 turbo", openai_api_key=openai_key)
+        return ChatOpenAI(model="gpt-3.5-turbo", openai_api_key=openai_key)
     else:
         return Free_model
 
-#-----------------Stremlit markdown-------------
+
+# ----------------- Streamlit Styling ----------------
 st.markdown(
     """
     <style>
@@ -79,8 +99,6 @@ st.markdown(
     header[data-testid="stHeader"] {
         background: rgba(0, 0, 0, 0.6); /* Black with translucency */
     }
-
-    /* Optional: remove shadow */
     header[data-testid="stHeader"]::before {
         box-shadow: none;
     }
@@ -88,6 +106,8 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+
+
 # ---------------- Streamlit UI ----------------
 st.title("📽️ YouTube Chat Bot ")
 st.write("Choose between **Paid (OpenAI)** or **Free (HuggingFace)** models.")
