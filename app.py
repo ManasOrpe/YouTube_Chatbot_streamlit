@@ -50,7 +50,7 @@ def fetch(video_url: str):
     }
     
     try:
-        api=YoutubeTranscriptApi()
+        api=YouTubeTranscriptApi()
         transcript = api.fetch(video_id, proxies=proxies)
         text = " ".join([t.text for t in transcript])
         return text
